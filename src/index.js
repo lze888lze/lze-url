@@ -51,6 +51,20 @@ export default {
         return jsonResponse({ error: 'Method not allowed' }, 405);
       }
 
+      // 球队分析 API
+      if (folder === 'pei_lv' && url.pathname === '/api/analysis') {
+        if (request.method === 'OPTIONS') {
+          return new Response(null, { headers: corsHeaders() });
+        }
+        if (request.method === 'GET') {
+          return await handleGetAnalysis(env, folder);
+        }
+        if (request.method === 'POST') {
+          return await handlePostAnalysis(request, env, folder);
+        }
+        return jsonResponse({ error: 'Method not allowed' }, 405);
+      }
+
       // 静态资源从 R2 读取
       const file = url.pathname === '/' ? site.index : url.pathname.slice(1);
       const path = folder + '/' + file;
@@ -151,6 +165,31 @@ async function handleGetData(env, folder) {
 async function handlePostData(request, env, folder) {
   try {
     const key = folder + '/match-data.json';
+    const body = await request.json();
+    await env.PEILV_BUCKET.put(key, JSON.stringify(body, null, 2));
+    return jsonResponse({ success: true });
+  } catch (e) {
+    return jsonResponse({ error: e.message }, 500);
+  }
+}
+
+async function handleGetAnalysis(env, folder) {
+  try {
+    const key = folder + '/analysis.json';
+    const object = await env.PEILV_BUCKET.get(key);
+    if (!object) {
+      return jsonResponse({ content: '' });
+    }
+    const data = await object.json();
+    return jsonResponse(data);
+  } catch (e) {
+    return jsonResponse({ content: '' });
+  }
+}
+
+async function handlePostAnalysis(request, env, folder) {
+  try {
+    const key = folder + '/analysis.json';
     const body = await request.json();
     await env.PEILV_BUCKET.put(key, JSON.stringify(body, null, 2));
     return jsonResponse({ success: true });
