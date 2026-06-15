@@ -2,15 +2,20 @@
  * lze-url - 泛域名 IP 优选 + 反向代理 Worker
  * 绑定泛域名: *.lze.cc.cd
  *
- * 路由映射:
- *   peilv.lze.cc.cd       -> R2: pei_lv/index.html (访客端)
- *   peilv-admin.lze.cc.cd -> R2: pei_lv/admin.html (管理端)
+ * R2 桶: lze-url
+ * 子域名自动映射到 R2 同名文件夹:
+ *   peilv.lze.cc.cd       -> R2: pei_lv/ (访客端 index.html)
+ *   peilv-admin.lze.cc.cd -> R2: pei_lv/ (管理端 admin.html)
+ *   xxx.lze.cc.cd         -> R2: xxx/    (以后扩展)
  *
  * 其他子域名保持原有转发逻辑
  */
 
-const R2_PREFIX = 'pei_lv/';
-const R2_DATA_KEY = 'pei_lv/match-data.json';
+// 子域名 -> R2 文件夹映射（可扩展）
+const siteMap = {
+  'peilv': 'pei_lv',
+  'peilv-admin': 'pei_lv'
+};
 
 // 子域名转发映射（原有逻辑保留）
 const hostMap = {
@@ -26,47 +31,27 @@ export default {
     const hostname = url.hostname;
     const sub = hostname.split('.')[0];
 
-    // ========== 赔率网站路由 ==========
+    // ========== R2 静态网站路由 ==========
 
-    // 访客端: peilv.lze.cc.cd
-    if (sub === 'peilv') {
-      // API 请求
-      if (url.pathname === '/api/data') {
+    const folder = siteMap[sub];
+    if (folder) {
+      // API 请求（pei_lv 专用）
+      if (folder === 'pei_lv' && url.pathname === '/api/data') {
         if (request.method === 'OPTIONS') {
           return new Response(null, { headers: corsHeaders() });
         }
         if (request.method === 'GET') {
-          return await handleGetData(env);
+          return await handleGetData(env, folder);
         }
         if (request.method === 'POST') {
-          return await handlePostData(request, env);
+          return await handlePostData(request, env, folder);
         }
         return jsonResponse({ error: 'Method not allowed' }, 405);
       }
 
       // 静态资源从 R2 读取
-      const path = url.pathname === '/' ? R2_PREFIX + 'index.html' : R2_PREFIX + url.pathname.slice(1);
-      return await serveR2(env, path);
-    }
-
-    // 管理端: peilv-admin.lze.cc.cd
-    if (sub === 'peilv-admin') {
-      // API 请求（管理端也需要读写数据）
-      if (url.pathname === '/api/data') {
-        if (request.method === 'OPTIONS') {
-          return new Response(null, { headers: corsHeaders() });
-        }
-        if (request.method === 'GET') {
-          return await handleGetData(env);
-        }
-        if (request.method === 'POST') {
-          return await handlePostData(request, env);
-        }
-        return jsonResponse({ error: 'Method not allowed' }, 405);
-      }
-
-      // 静态资源从 R2 读取
-      const path = url.pathname === '/' ? R2_PREFIX + 'admin.html' : R2_PREFIX + url.pathname.slice(1);
+      const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
+      const path = folder + '/' + file;
       return await serveR2(env, path);
     }
 
@@ -145,9 +130,10 @@ async function serveR2(env, path) {
 
 // ========== API 接口 ==========
 
-async function handleGetData(env) {
+async function handleGetData(env, folder) {
   try {
-    const object = await env.PEILV_BUCKET.get(R2_DATA_KEY);
+    const key = folder + '/match-data.json';
+    const object = await env.PEILV_BUCKET.get(key);
     if (!object) {
       return jsonResponse({ error: 'No data found' }, 404);
     }
@@ -160,10 +146,11 @@ async function handleGetData(env) {
   }
 }
 
-async function handlePostData(request, env) {
+async function handlePostData(request, env, folder) {
   try {
+    const key = folder + '/match-data.json';
     const body = await request.json();
-    await env.PEILV_BUCKET.put(R2_DATA_KEY, JSON.stringify(body, null, 2));
+    await env.PEILV_BUCKET.put(key, JSON.stringify(body, null, 2));
     return jsonResponse({ success: true });
   } catch (e) {
     return jsonResponse({ error: e.message }, 500);
