@@ -12,9 +12,10 @@
  */
 
 // 子域名 -> R2 文件夹映射（可扩展）
+// 格式: 子域名: { folder: 'R2文件夹', index: '入口文件' }
 const siteMap = {
-  'peilv': 'pei_lv',
-  'peilv-admin': 'pei_lv'
+  'peilv': { folder: 'pei_lv', index: 'index.html' },
+  'peilv-admin': { folder: 'pei_lv', index: 'admin.html' }
 };
 
 // 子域名转发映射（原有逻辑保留）
@@ -33,8 +34,9 @@ export default {
 
     // ========== R2 静态网站路由 ==========
 
-    const folder = siteMap[sub];
-    if (folder) {
+    const site = siteMap[sub];
+    if (site) {
+      const folder = site.folder;
       // API 请求（pei_lv 专用）
       if (folder === 'pei_lv' && url.pathname === '/api/data') {
         if (request.method === 'OPTIONS') {
@@ -50,7 +52,7 @@ export default {
       }
 
       // 静态资源从 R2 读取
-      const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
+      const file = url.pathname === '/' ? site.index : url.pathname.slice(1);
       const path = folder + '/' + file;
       return await serveR2(env, path);
     }
