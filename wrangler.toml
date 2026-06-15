@@ -4,4 +4,4 @@ compatibility_date = "2024-01-01"
 
 [[r2_buckets]]
 binding = "PEILV_BUCKET"
-bucket_name = "peilv-data"
+bucket_name = "lze-url"
