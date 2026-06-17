@@ -4,7 +4,7 @@
  *
  * 模块化架构:
  *   每个站点独立放在 src/<module>/ 目录下
- *   模块导出 { subdomains, folder, handle(request, env, indexFile, sub) }
+ *   模块导出 { subdomains, folder, handle(request, env, ctx, indexFile, sub) }
  *   index.js 只负责路由分发
  *
  * 扩展新站点:
@@ -27,7 +27,7 @@ for (const [sub, indexFile] of Object.entries(pei_lv.subdomains)) {
 // ========== 主入口 ==========
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const hostname = url.hostname;
     const sub = hostname.split('.')[0];
@@ -35,7 +35,7 @@ export default {
     // 查找匹配的模块
     const mod = moduleMap[sub];
     if (mod) {
-      return await mod.handler.handle(request, env, mod.indexFile, sub);
+      return await mod.handler.handle(request, env, ctx, mod.indexFile, sub);
     }
 
     // 未匹配的子域名返回 404
