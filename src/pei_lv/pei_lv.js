@@ -157,10 +157,12 @@ export async function handle(request, env, ctx, indexFile, sub) {
   // 使用 waitUntil 让 Worker 在响应后继续执行后台任务
   if (!url.pathname.startsWith('/api/')) {
     if (ctx && ctx.waitUntil) {
-      ctx.waitUntil(logVisit(request, env, sub, url.pathname));
+      ctx.waitUntil(
+        logVisit(request, env, sub, url.pathname).catch(() => {})
+      );
     } else {
       // 降级：直接 await，会稍微延迟响应但确保写入
-      await logVisit(request, env, sub, url.pathname);
+      await logVisit(request, env, sub, url.pathname).catch(() => {});
     }
   }
 
@@ -170,6 +172,16 @@ export async function handle(request, env, ctx, indexFile, sub) {
       return await getVisitors(request, env, sub);
     }
     return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
+
+  // API: 强制写入一条测试记录（调试用）
+  if (url.pathname === '/api/visitors-debug') {
+    try {
+      await logVisit(request, env, sub, '/debug-test');
+      return jsonResponse({ success: true, message: 'Test record written' });
+    } catch (e) {
+      return jsonResponse({ success: false, error: e.message }, 500);
+    }
   }
 
   // API: 比赛数据
