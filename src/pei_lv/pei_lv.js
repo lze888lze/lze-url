@@ -11,10 +11,7 @@
  *   POST /api/data     - 保存比赛数据
  *   GET  /api/analysis - 获取球队分析
  *   POST /api/analysis - 保存球队分析
- *   GET  /api/visitors - 获取访客统计
  */
-
-import { logVisit, getVisitors } from '../visitor.js';
 
 // ========== 工具函数 ==========
 
@@ -145,44 +142,12 @@ export const folder = 'pei_lv';
  * 处理请求的主入口
  * @param {Request} request
  * @param {object} env - Cloudflare Worker 环境变量
- * @param {object} ctx - Cloudflare Worker execution context
  * @param {string} indexFile - 该子域名对应的入口文件
  * @param {string} sub - 子域名前缀
  * @returns {Response}
  */
-export async function handle(request, env, ctx, indexFile, sub) {
+export async function handle(request, env, indexFile, sub) {
   const url = new URL(request.url);
-
-  // 记录访问统计（排除 API 请求，减少无意义记录）
-  // 使用 waitUntil 让 Worker 在响应后继续执行后台任务
-  if (!url.pathname.startsWith('/api/')) {
-    if (ctx && ctx.waitUntil) {
-      ctx.waitUntil(
-        logVisit(request, env, sub, url.pathname).catch(() => {})
-      );
-    } else {
-      // 降级：直接 await，会稍微延迟响应但确保写入
-      await logVisit(request, env, sub, url.pathname).catch(() => {});
-    }
-  }
-
-  // API: 访客统计
-  if (url.pathname === '/api/visitors') {
-    if (request.method === 'GET') {
-      return await getVisitors(request, env, sub);
-    }
-    return jsonResponse({ error: 'Method not allowed' }, 405);
-  }
-
-  // API: 强制写入一条测试记录（调试用）
-  if (url.pathname === '/api/visitors-debug') {
-    try {
-      await logVisit(request, env, sub, '/debug-test');
-      return jsonResponse({ success: true, message: 'Test record written' });
-    } catch (e) {
-      return jsonResponse({ success: false, error: e.message }, 500);
-    }
-  }
 
   // API: 比赛数据
   if (url.pathname === '/api/data') {
@@ -217,4 +182,3 @@ export async function handle(request, env, ctx, indexFile, sub) {
   const path = folder + '/' + file;
   return await serveR2(env, path);
 }
-
