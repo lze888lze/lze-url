@@ -4,7 +4,7 @@
  *
  * 模块化架构:
  *   每个站点独立放在 src/<module>/ 目录下
- *   模块导出 { subdomains, folder, handle(request, env, indexFile) }
+ *   模块导出 { subdomains, folder, handle(request, env, indexFile, sub) }
  *   index.js 只负责路由分发
  *
  * 扩展新站点:
@@ -35,7 +35,7 @@ export default {
     // 查找匹配的模块
     const mod = moduleMap[sub];
     if (mod) {
-      return await mod.handler.handle(request, env, mod.indexFile);
+      return await mod.handler.handle(request, env, mod.indexFile, sub);
     }
 
     // 未匹配的子域名返回 404
