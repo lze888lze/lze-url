@@ -217,3 +217,4 @@ export async function handle(request, env, ctx, indexFile, sub) {
   const path = folder + '/' + file;
   return await serveR2(env, path);
 }
+
