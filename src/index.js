@@ -13,6 +13,7 @@
  */
 
 import * as pei_lv from './pei_lv/pei_lv.js';
+import * as docs from './docs/docs.js';
 
 // ========== 模块注册 ==========
 // 格式: '子域名': { handler: 模块, indexFile: '入口文件' }
@@ -22,6 +23,11 @@ const moduleMap = {};
 // 注册 pei_lv 模块
 for (const [sub, indexFile] of Object.entries(pei_lv.subdomains)) {
   moduleMap[sub] = { handler: pei_lv, indexFile };
+}
+
+// 注册 docs 模块
+for (const [sub, indexFile] of Object.entries(docs.subdomains)) {
+  moduleMap[sub] = { handler: docs, indexFile };
 }
 
 // ========== 主入口 ==========
