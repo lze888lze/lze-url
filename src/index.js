@@ -14,6 +14,7 @@
 
 import * as pei_lv from './pei_lv/pei_lv.js';
 import * as docs from './docs/docs.js';
+import * as hf_api from './hf-api/hf-api.js';
 
 // ========== 模块注册 ==========
 // 格式: '子域名': { handler: 模块, indexFile: '入口文件' }
@@ -30,10 +31,15 @@ for (const [sub, indexFile] of Object.entries(docs.subdomains)) {
   moduleMap[sub] = { handler: docs, indexFile };
 }
 
+// 注册 hf-api 模块
+for (const [sub, indexFile] of Object.entries(hf_api.subdomains)) {
+  moduleMap[sub] = { handler: hf_api, indexFile };
+}
+
 // ========== 主入口 ==========
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const hostname = url.hostname;
     const sub = hostname.split('.')[0];
@@ -41,7 +47,7 @@ export default {
     // 查找匹配的模块
     const mod = moduleMap[sub];
     if (mod) {
-      return await mod.handler.handle(request, env, mod.indexFile, sub);
+      return await mod.handler.handle(request, env, mod.indexFile, sub, ctx);
     }
 
     // 未匹配的子域名返回 404
