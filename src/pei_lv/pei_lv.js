@@ -145,17 +145,23 @@ export const folder = 'pei_lv';
  * 处理请求的主入口
  * @param {Request} request
  * @param {object} env - Cloudflare Worker 环境变量
+ * @param {object} ctx - Cloudflare Worker execution context
  * @param {string} indexFile - 该子域名对应的入口文件
  * @param {string} sub - 子域名前缀
  * @returns {Response}
  */
-export async function handle(request, env, indexFile, sub) {
+export async function handle(request, env, ctx, indexFile, sub) {
   const url = new URL(request.url);
 
   // 记录访问统计（排除 API 请求，减少无意义记录）
+  // 使用 waitUntil 让 Worker 在响应后继续执行后台任务
   if (!url.pathname.startsWith('/api/')) {
-    // 异步记录，不阻塞主响应
-    logVisit(request, env, sub, url.pathname).catch(() => {});
+    if (ctx && ctx.waitUntil) {
+      ctx.waitUntil(logVisit(request, env, sub, url.pathname));
+    } else {
+      // 降级：直接 await，会稍微延迟响应但确保写入
+      await logVisit(request, env, sub, url.pathname);
+    }
   }
 
   // API: 访客统计
