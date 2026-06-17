@@ -11,7 +11,10 @@
  *   POST /api/data     - 保存比赛数据
  *   GET  /api/analysis - 获取球队分析
  *   POST /api/analysis - 保存球队分析
+ *   GET  /api/visitors - 获取访客统计
  */
+
+import { logVisit, getVisitors } from '../visitor.js';
 
 // ========== 工具函数 ==========
 
@@ -143,10 +146,25 @@ export const folder = 'pei_lv';
  * @param {Request} request
  * @param {object} env - Cloudflare Worker 环境变量
  * @param {string} indexFile - 该子域名对应的入口文件
+ * @param {string} sub - 子域名前缀
  * @returns {Response}
  */
-export async function handle(request, env, indexFile) {
+export async function handle(request, env, indexFile, sub) {
   const url = new URL(request.url);
+
+  // 记录访问统计（排除 API 请求，减少无意义记录）
+  if (!url.pathname.startsWith('/api/')) {
+    // 异步记录，不阻塞主响应
+    logVisit(request, env, sub, url.pathname).catch(() => {});
+  }
+
+  // API: 访客统计
+  if (url.pathname === '/api/visitors') {
+    if (request.method === 'GET') {
+      return await getVisitors(request, env, sub);
+    }
+    return jsonResponse({ error: 'Method not allowed' }, 405);
+  }
 
   // API: 比赛数据
   if (url.pathname === '/api/data') {
