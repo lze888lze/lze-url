@@ -12,7 +12,7 @@
  *   2. 在下方 import 并注册到 moduleMap
  */
 
-import pei_lv from './pei_lv/pei_lv.js';
+import * as pei_lv from './pei_lv/pei_lv.js';
 
 // ========== 模块注册 ==========
 // 格式: '子域名': { handler: 模块, indexFile: '入口文件' }
