@@ -15,6 +15,7 @@
 import * as pei_lv from './pei_lv/pei_lv.js';
 import * as docs from './docs/docs.js';
 import * as hf_api from './hf-api/hf-api.js';
+import { recordAccessToD1 } from './utils/access-log.js';
 
 // ========== 模块注册 ==========
 // 格式: '子域名': { handler: 模块, indexFile: '入口文件' }
@@ -43,6 +44,10 @@ export default {
     const url = new URL(request.url);
     const hostname = url.hostname;
     const sub = hostname.split('.')[0];
+
+    if (ctx?.waitUntil) {
+      ctx.waitUntil(recordAccessToD1(request, env, sub));
+    }
 
     // 查找匹配的模块
     const mod = moduleMap[sub];
