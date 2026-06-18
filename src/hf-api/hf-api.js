@@ -108,10 +108,15 @@ async function recordStats(request, env, realIP, typeConfig) {
 function getLocation(request, ip) {
   const ipv6Province = lookupProvince(ip);
   if (ipv6Province) {
+    // 港澳台条目已直接返回 "中国香港" / "中国澳门" / "中国台湾"，不再加后缀
     if (ipv6Province.startsWith('中国')) {
       return ipv6Province;
     }
-    return '中国' + ipv6Province + (MUNICIPALITIES.includes(ipv6Province) ? '市' : '省');
+    // 国内省份（如 "广东" / "北京"）：直辖市加"市"，其他加"省"
+    if (MUNICIPALITIES.includes(ipv6Province)) {
+      return '中国' + ipv6Province + '市';
+    }
+    return '中国' + ipv6Province + '省';
   }
 
   const cf = request.cf || {};
