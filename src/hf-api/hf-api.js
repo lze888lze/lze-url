@@ -3,7 +3,7 @@
 // 功能：记录访问统计 → 代理到 Hugging Face API
 // 子域名：hf-api.lze.cc.cd
 // KV Key 格式：国家+省份+IP（如：中国广东240.12.34.56）
-// KV Value 格式：{"次数":2,"time":"2026/5/28 06:43:00","尾缀":{"sl":[0,0],"ho":[0,0],"pz":[2,0],"vz":[0,0]}}
+// KV Value 格式：{"次数":2,"time":"2026/5/28 06:43:00","尾缀":{"sl":[0,0],"ho":[0,0],"pz":[2,0],"vz":[0,0],"ip":[0,0]}}
 // ============================================================
 
 import { lookupProvince } from './ipv6-province.js';
@@ -17,6 +17,7 @@ const TYPE_CONFIG = {
   'puzzle-base64': { stats: 'pz', mode: 1, target: 'puzzle-base64' },
   'visualize': { stats: 'vz', mode: 0, target: 'visualize' },
   'visualize-base64': { stats: 'vz', mode: 1, target: 'visualize-base64' },
+  'ip': { stats: 'ip', mode: 0, target: 'ip' },
 };
 
 const HF_BASE_URL = 'https://lze888lze-hf-api.hf.space';
@@ -24,7 +25,7 @@ const ALLOWED_PATHS = Object.keys(TYPE_CONFIG).join(', ');
 
 const DEFAULT_DATA = {
   '次数': 0,
-  '尾缀': { 'sl': [0, 0], 'ho': [0, 0], 'pz': [0, 0], 'vz': [0, 0] },
+  '尾缀': { 'sl': [0, 0], 'ho': [0, 0], 'pz': [0, 0], 'vz': [0, 0], 'ip': [0, 0] },
   'time': ''
 };
 
@@ -69,10 +70,15 @@ export async function handle(request, env, indexFile, sub, ctx) {
 
   const realIP = request.headers.get('cf-connecting-ip') || 'unknown_ip';
 
+  const statsConfig = {
+    ...typeConfig,
+    mode: cleanPath === 'ip' && request.method.toUpperCase() === 'POST' ? 1 : typeConfig.mode,
+  };
+
   if (ctx?.waitUntil) {
-    ctx.waitUntil(recordStats(request, env, realIP, typeConfig));
+    ctx.waitUntil(recordStats(request, env, realIP, statsConfig));
   } else {
-    await recordStats(request, env, realIP, typeConfig);
+    await recordStats(request, env, realIP, statsConfig);
   }
 
   return proxyToTarget(request, HF_BASE_URL, typeConfig.target);
@@ -142,6 +148,7 @@ async function loadKVData(env, key) {
         'ho': Array.isArray(suffix['ho']) ? suffix['ho'] : [0, 0],
         'pz': Array.isArray(suffix['pz']) ? suffix['pz'] : [0, 0],
         'vz': Array.isArray(suffix['vz']) ? suffix['vz'] : [0, 0],
+        'ip': Array.isArray(suffix['ip']) ? suffix['ip'] : [0, 0],
       },
       'time': data['time'] || ''
     };
@@ -168,12 +175,14 @@ function getBeijingTime() {
 }
 
 async function proxyToTarget(request, baseUrl, endpoint) {
-  const targetUrl = `${baseUrl}/${endpoint}`;
+  const sourceUrl = new URL(request.url);
+  const targetUrl = `${baseUrl}/${endpoint}${sourceUrl.search}`;
+  const method = request.method.toUpperCase();
   try {
     return await fetch(targetUrl, {
       method: request.method,
       headers: request.headers,
-      body: request.body
+      body: method === 'GET' || method === 'HEAD' ? undefined : request.body
     });
   } catch (e) {
     return jsonResponse({
