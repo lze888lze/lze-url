@@ -105,12 +105,22 @@ function shouldSkipAccessLog(url) {
 }
 
 async function lookupIp(env, ip) {
-  if (!env.IP_LOOKUP_API) {
+  const tencentResult = await lookupIpByTencent(env, ip);
+  if (tencentResult) return tencentResult;
+
+  const ip9Result = await lookupIpByIp9(ip);
+  if (ip9Result) return ip9Result;
+
+  return null;
+}
+
+async function lookupIpByTencent(env, ip) {
+  if (!env.TENCENT_IP_KEY) {
     return null;
   }
 
   try {
-    const apiUrl = `${env.IP_LOOKUP_API}?ip=${encodeURIComponent(ip)}`;
+    const apiUrl = `https://apis.map.qq.com/ws/location/v1/ip?key=${encodeURIComponent(env.TENCENT_IP_KEY)}&ip=${encodeURIComponent(ip)}&output=json`;
     const resp = await fetch(apiUrl, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
@@ -121,13 +131,77 @@ async function lookupIp(env, ip) {
     }
 
     const data = await resp.json();
-    if (data?.消息) {
+
+    // 0 正常；120 每秒上限；121 每日上限；382 IP无法定位。非 0 统一回退 IP9。
+    if (data?.status !== 0 || !data?.result?.ad_info) {
       return null;
     }
 
-    return data;
+    const ad = data.result.ad_info || {};
+    return {
+      ip,
+      '版本': ip.includes(':') ? 'IPv6' : 'IPv4',
+      '归属地': [
+        ad.nation || '',
+        ad.province || '',
+        ad.city || '',
+        '',
+        ad.nation_code ? String(ad.nation_code) : ''
+      ].join('|'),
+      '数据': {
+        '国家': ad.nation || '',
+        '省份/州': ad.province || '',
+        '城市': ad.city || '',
+        '运营商': '',
+        '国家代码': ad.nation_code ? String(ad.nation_code) : ''
+      },
+      '消息': null
+    };
   } catch (e) {
-    console.error('IP 查询失败:', e);
+    console.error('腾讯 IP 查询失败:', e);
+    return null;
+  }
+}
+
+async function lookupIpByIp9(ip) {
+  try {
+    const apiUrl = `https://ip9.com.cn/get?ip=${encodeURIComponent(ip)}`;
+    const resp = await fetch(apiUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!resp.ok) {
+      return null;
+    }
+
+    const data = await resp.json();
+    if (data?.ret !== 200 || !data?.data) {
+      return null;
+    }
+
+    const item = data.data || {};
+    return {
+      ip,
+      '版本': ip.includes(':') ? 'IPv6' : 'IPv4',
+      '归属地': [
+        item.country || '',
+        item.prov || '',
+        item.city || '',
+        item.isp || '',
+        (item.country_code || '').toUpperCase()
+      ].join('|'),
+      '数据': {
+        '国家': item.country || '',
+        '省份/州': item.prov || '',
+        '城市': item.city || '',
+        '运营商': item.isp || '',
+        '国家代码': (item.country_code || '').toUpperCase()
+      },
+      '消息': null
+    };
+  } catch (e) {
+    console.error('IP9 查询失败:', e);
     return null;
   }
 }
