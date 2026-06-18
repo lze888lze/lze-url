@@ -15,6 +15,7 @@ export const subdomains = {
 export const folder = 'logs';
 
 const PAGE_SIZE = 50;
+const AUTH_COOKIE = 'logs_auth';
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -37,12 +38,49 @@ function htmlResponse(html) {
   });
 }
 
+function redirectResponse(location, headers = {}) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'Location': location,
+      ...headers
+    }
+  });
+}
+
 export async function handle(request, env) {
   if (request.method === 'OPTIONS') {
     return jsonResponse({ ok: true });
   }
 
   const url = new URL(request.url);
+
+  if (!getPassword(env)) {
+    if (url.pathname.startsWith('/api/')) {
+      return jsonResponse({ error: '服务端未配置 LOGS_PASSWORD' }, 500);
+    }
+
+    return htmlResponse(renderConfigErrorPage());
+  }
+
+  if (url.pathname === '/login' && request.method === 'POST') {
+    return handleLogin(request, env);
+  }
+
+  if (url.pathname === '/logout') {
+    return redirectResponse('/', {
+      'Set-Cookie': `${AUTH_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`
+    });
+  }
+
+  const authed = await isAuthed(request, env);
+  if (!authed) {
+    if (url.pathname.startsWith('/api/')) {
+      return jsonResponse({ error: '未登录' }, 401);
+    }
+
+    return htmlResponse(renderLoginPage(url.searchParams.get('error') === '1'));
+  }
 
   if (!env.IP_LOG_DB) {
     return jsonResponse({ error: 'D1 未绑定：IP_LOG_DB' }, 500);
@@ -78,6 +116,58 @@ export async function handle(request, env) {
   }
 
   return jsonResponse({ error: 'Not Found' }, 404);
+}
+
+async function handleLogin(request, env) {
+  const expected = getPassword(env);
+  if (!expected) {
+    return htmlResponse(renderConfigErrorPage());
+  }
+
+  const form = await request.formData();
+  const password = String(form.get('password') || '');
+
+  if (password !== expected) {
+    return redirectResponse('/?error=1');
+  }
+
+  const token = await createAuthToken(expected);
+  return redirectResponse('/', {
+    'Set-Cookie': `${AUTH_COOKIE}=${token}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`
+  });
+}
+
+async function isAuthed(request, env) {
+  const password = getPassword(env);
+  if (!password) {
+    return false;
+  }
+
+  const cookie = request.headers.get('cookie') || '';
+  const token = getCookie(cookie, AUTH_COOKIE);
+  if (!token) {
+    return false;
+  }
+
+  return token === await createAuthToken(password);
+}
+
+function getPassword(env) {
+  return env.LOGS_PASSWORD || '';
+}
+
+function getCookie(cookie, name) {
+  return cookie
+    .split(';')
+    .map(item => item.trim())
+    .find(item => item.startsWith(`${name}=`))
+    ?.slice(name.length + 1) || '';
+}
+
+async function createAuthToken(password) {
+  const data = new TextEncoder().encode(`logs:${password}`);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -190,6 +280,168 @@ async function getDailyStats(env) {
   `).all();
 
   return (result.results || []).reverse();
+}
+
+function renderLoginPage(hasError) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>访问日志看板登录</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #162033;
+      --muted: #667085;
+      --border: #d9deea;
+      --accent: #2563eb;
+      --danger: #c2410c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1420;
+        --card: #171d2a;
+        --text: #e8edf7;
+        --muted: #aab5c8;
+        --border: #2d3748;
+        --accent: #7aa2ff;
+        --danger: #fb923c;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .card {
+      width: min(420px, calc(100% - 32px));
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+    h1 { margin: 0 0 8px; font-size: 24px; }
+    p { margin: 0 0 20px; color: var(--muted); }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 16px;
+      color: var(--text);
+      background: transparent;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      padding: 12px 16px;
+      font-size: 15px;
+      cursor: pointer;
+      margin-top: 16px;
+    }
+    .error {
+      color: var(--danger);
+      margin-top: 12px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <form class="card" method="POST" action="/login">
+    <h1>访问日志看板</h1>
+    <p>请输入密码后查看 D1 访问日志数据。</p>
+    <label for="password">密码</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" autofocus>
+    <button type="submit">进入看板</button>
+    ${hasError ? '<div class="error">密码错误，请重新输入。</div>' : ''}
+  </form>
+</body>
+</html>`;
+}
+
+function renderConfigErrorPage() {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>日志看板配置缺失</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --text: #162033;
+      --muted: #667085;
+      --border: #d9deea;
+      --danger: #c2410c;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1420;
+        --card: #171d2a;
+        --text: #e8edf7;
+        --muted: #aab5c8;
+        --border: #2d3748;
+        --danger: #fb923c;
+      }
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .card {
+      width: min(520px, calc(100% - 32px));
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 28px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+    h1 { margin: 0 0 10px; font-size: 24px; color: var(--danger); }
+    p { margin: 8px 0; color: var(--muted); line-height: 1.7; }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: rgba(127, 127, 127, 0.14);
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>缺少密码配置</h1>
+    <p>请在 Cloudflare Worker 的变量和密钥中添加密钥变量：</p>
+    <p><code>LOGS_PASSWORD</code></p>
+    <p>保存并部署后，再访问日志看板。</p>
+  </div>
+</body>
+</html>`;
 }
 
 function renderPage() {
@@ -331,7 +583,10 @@ function renderPage() {
         <h1>访问日志看板</h1>
         <p>查看 D1 中记录的业务访问数据，数据来自 access_logs 表。</p>
       </div>
-      <button onclick="loadAll()">刷新数据</button>
+      <div>
+        <button onclick="loadAll()">刷新数据</button>
+        <a href="/logout" style="margin-left:10px;color:var(--muted);text-decoration:none">退出</a>
+      </div>
     </header>
 
     <section class="grid">
