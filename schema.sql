@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS access_logs (
   country TEXT DEFAULT '',
   region TEXT DEFAULT '',
   city TEXT DEFAULT '',
+  district TEXT DEFAULT '',
   isp TEXT DEFAULT '',
   country_code TEXT DEFAULT '',
   raw_region TEXT DEFAULT '',

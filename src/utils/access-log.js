@@ -37,6 +37,7 @@ export async function recordAccessToD1(request, env, sub) {
         country,
         region,
         city,
+        district,
         isp,
         country_code,
         raw_region,
@@ -51,7 +52,7 @@ export async function recordAccessToD1(request, env, sub) {
         cf_region,
         cf_city,
         cf_colo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       now,
       ip,
@@ -59,6 +60,7 @@ export async function recordAccessToD1(request, env, sub) {
       data['国家'] || '',
       data['省份/州'] || '',
       data['城市'] || '',
+      data['区县'] || '',
       data['运营商'] || '',
       data['国家代码'] || '',
       ipInfo?.归属地 || '',
@@ -138,20 +140,36 @@ async function lookupIpByTencent(env, ip) {
     }
 
     const ad = data.result.ad_info || {};
+    const nation   = ad.nation   || '';
+    const province = ad.province || '';
+    const city     = ad.city     || '';
+    const district = ad.district || '';
+
+    // 直辖市去重：province 和 city 相同（如 "上海市"）时，
+    // region 保留 province，city 置空，district 用 ad.district
+    // 渲染效果：中国 上海市 浦东新区（跳过空的 city）
+    // 普通省：中国 广东省 肇庆市 高要区
+    let finalCity = city;
+    let finalDistrict = district;
+    if (province && city && province === city) {
+      finalCity = '';
+    }
+
     return {
       ip,
       '版本': ip.includes(':') ? 'IPv6' : 'IPv4',
       '归属地': [
-        ad.nation || '',
-        ad.province || '',
-        ad.city || '',
-        '',
+        nation,
+        province,
+        finalCity,
+        finalDistrict,
         ad.nation_code ? String(ad.nation_code) : ''
       ].join('|'),
       '数据': {
-        '国家': ad.nation || '',
-        '省份/州': ad.province || '',
-        '城市': ad.city || '',
+        '国家': nation,
+        '省份/州': province,
+        '城市': finalCity,
+        '区县': finalDistrict,
         '运营商': '',
         '国家代码': ad.nation_code ? String(ad.nation_code) : ''
       },
@@ -188,6 +206,7 @@ async function lookupIpByIp9(ip) {
         item.country || '',
         item.prov || '',
         item.city || '',
+        '',
         item.isp || '',
         (item.country_code || '').toUpperCase()
       ].join('|'),
@@ -195,6 +214,7 @@ async function lookupIpByIp9(ip) {
         '国家': item.country || '',
         '省份/州': item.prov || '',
         '城市': item.city || '',
+        '区县': '',
         '运营商': item.isp || '',
         '国家代码': (item.country_code || '').toUpperCase()
       },

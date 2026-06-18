@@ -188,7 +188,7 @@ async function getSummary(env) {
   );
   const uniqueIp = await firstValue(env, 'SELECT COUNT(DISTINCT ip) AS value FROM access_logs');
   const last = await env.IP_LOG_DB.prepare(`
-    SELECT id, time, ip, country, region, city, subdomain, path, method
+    SELECT id, time, ip, country, region, city, district, subdomain, path, method
     FROM access_logs
     ORDER BY id DESC
     LIMIT 1
@@ -218,6 +218,7 @@ async function getRecent(env, searchParams, limit) {
       country,
       region,
       city,
+      district,
       isp,
       country_code,
       raw_region,
@@ -257,13 +258,14 @@ function buildRecentFilters(searchParams) {
       OR country LIKE ?
       OR region LIKE ?
       OR city LIKE ?
+      OR district LIKE ?
       OR isp LIKE ?
       OR path LIKE ?
       OR query LIKE ?
       OR user_agent LIKE ?
       OR raw_region LIKE ?
     )`);
-    values.push(like, like, like, like, like, like, like, like, like);
+    values.push(like, like, like, like, like, like, like, like, like, like);
   }
 
   if (subdomain) {
@@ -832,7 +834,7 @@ function renderPage() {
 
         const tbody = document.getElementById('recentRows');
         tbody.innerHTML = recent.length ? recent.map(row => {
-          const area = [row.country, row.region, row.city].filter(Boolean).join(' ');
+          const area = [row.country, row.region, row.city, row.district].filter(Boolean).join(' ');
           const fullPath = (row.path || '') + (row.query || '');
           return '<tr>' +
             '<td>' + row.id + '</td>' +
