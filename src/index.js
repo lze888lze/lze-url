@@ -45,13 +45,13 @@ export default {
     const hostname = url.hostname;
     const sub = hostname.split('.')[0];
 
-    if (ctx?.waitUntil) {
-      ctx.waitUntil(recordAccessToD1(request, env, sub));
-    }
-
     // 查找匹配的模块
     const mod = moduleMap[sub];
     if (mod) {
+      if (ctx?.waitUntil) {
+        ctx.waitUntil(recordAccessToD1(request, env, sub));
+      }
+
       return await mod.handler.handle(request, env, mod.indexFile, sub, ctx);
     }
 
