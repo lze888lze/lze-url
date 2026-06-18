@@ -15,6 +15,7 @@
 import * as pei_lv from './pei_lv/pei_lv.js';
 import * as docs from './docs/docs.js';
 import * as hf_api from './hf-api/hf-api.js';
+import * as logs from './logs/logs.js';
 import { recordAccessToD1 } from './utils/access-log.js';
 
 // ========== 模块注册 ==========
@@ -35,6 +36,11 @@ for (const [sub, indexFile] of Object.entries(docs.subdomains)) {
 // 注册 hf-api 模块
 for (const [sub, indexFile] of Object.entries(hf_api.subdomains)) {
   moduleMap[sub] = { handler: hf_api, indexFile };
+}
+
+// 注册 logs 模块
+for (const [sub, indexFile] of Object.entries(logs.subdomains)) {
+  moduleMap[sub] = { handler: logs, indexFile };
 }
 
 // ========== 主入口 ==========
