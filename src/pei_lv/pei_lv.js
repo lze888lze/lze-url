@@ -179,6 +179,8 @@ export async function handle(request, env, indexFile, sub) {
 
   // 静态资源从 R2 读取
   const file = url.pathname === '/' ? indexFile : url.pathname.slice(1);
-  const path = folder + '/' + file;
+  // 路径规范化，防止 ../ 穿越到其他目录
+  const safeFile = file.split('/').filter(seg => seg && seg !== '..').join('/');
+  const path = folder + '/' + safeFile;
   return await serveR2(env, path);
 }

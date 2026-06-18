@@ -48,7 +48,7 @@ function redirectResponse(location, headers = {}) {
   });
 }
 
-export async function handle(request, env) {
+export async function handle(request, env, indexFile, sub, ctx) {
   if (request.method === 'OPTIONS') {
     return jsonResponse({ ok: true });
   }
