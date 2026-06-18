@@ -9,3 +9,8 @@ bucket_name = "lze-url"
 [[kv_namespaces]]
 binding = "lze"
 id = "d600db551a4e4b8a9745ac503317a80d"
+
+[[d1_databases]]
+binding = "IP_LOG_DB"
+database_name = "lze-url-logs"
+database_id = "aa1d8f28-bef9-4871-a97f-fd57eb677cfd"
