@@ -23,7 +23,7 @@ function jsonResponse(data, status = 200) {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type'
     }
   });
@@ -96,7 +96,11 @@ export async function handle(request, env) {
 
   if (url.pathname === '/api/recent') {
     const limit = clampNumber(url.searchParams.get('limit'), 1, 200, PAGE_SIZE);
-    return jsonResponse(await getRecent(env, limit));
+    return jsonResponse(await getRecent(env, url.searchParams, limit));
+  }
+
+  if (url.pathname === '/api/clear' && request.method === 'POST') {
+    return jsonResponse(await clearLogs(env));
   }
 
   if (url.pathname === '/api/stats/subdomain') {
@@ -203,7 +207,8 @@ async function firstValue(env, sql) {
   return row?.value ?? 0;
 }
 
-async function getRecent(env, limit) {
+async function getRecent(env, searchParams, limit) {
+  const filters = buildRecentFilters(searchParams);
   const result = await env.IP_LOG_DB.prepare(`
     SELECT
       id,
@@ -229,11 +234,58 @@ async function getRecent(env, limit) {
       cf_colo,
       created_at
     FROM access_logs
+    ${filters.where}
     ORDER BY id DESC
     LIMIT ?
-  `).bind(limit).all();
+  `).bind(...filters.values, limit).all();
 
   return result.results || [];
+}
+
+function buildRecentFilters(searchParams) {
+  const where = [];
+  const values = [];
+
+  const q = (searchParams.get('q') || '').trim();
+  const subdomain = (searchParams.get('subdomain') || '').trim();
+  const method = (searchParams.get('method') || '').trim().toUpperCase();
+
+  if (q) {
+    const like = `%${q}%`;
+    where.push(`(
+      ip LIKE ?
+      OR country LIKE ?
+      OR region LIKE ?
+      OR city LIKE ?
+      OR isp LIKE ?
+      OR path LIKE ?
+      OR query LIKE ?
+      OR user_agent LIKE ?
+      OR raw_region LIKE ?
+    )`);
+    values.push(like, like, like, like, like, like, like, like, like);
+  }
+
+  if (subdomain) {
+    where.push('subdomain = ?');
+    values.push(subdomain);
+  }
+
+  if (method) {
+    where.push('method = ?');
+    values.push(method);
+  }
+
+  return {
+    where: where.length ? `WHERE ${where.join(' AND ')}` : '',
+    values
+  };
+}
+
+async function clearLogs(env) {
+  await env.IP_LOG_DB.prepare('DELETE FROM access_logs').run();
+  await env.IP_LOG_DB.prepare("DELETE FROM sqlite_sequence WHERE name = 'access_logs'").run();
+  return { ok: true };
 }
 
 async function getGroupedStats(env, field) {
@@ -505,6 +557,38 @@ function renderPage() {
       font-size: 14px;
       cursor: pointer;
     }
+    button.secondary {
+      background: var(--soft);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    button.danger {
+      background: var(--danger);
+      color: white;
+    }
+    .filters {
+      display: grid;
+      grid-template-columns: 1fr 150px 120px auto auto auto;
+      gap: 10px;
+      align-items: end;
+      margin-bottom: 14px;
+    }
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: transparent;
+      color: var(--text);
+      outline: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
     .grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -571,6 +655,7 @@ function renderPage() {
     @media (max-width: 900px) {
       header { display: block; }
       button { margin-top: 14px; }
+      .filters { grid-template-columns: 1fr; }
       .grid, .charts { grid-template-columns: 1fr; }
       table { font-size: 12px; }
     }
@@ -605,6 +690,35 @@ function renderPage() {
 
     <section class="card">
       <h2>最近访问</h2>
+      <div class="filters">
+        <div class="field">
+          <label for="q">搜索</label>
+          <input id="q" placeholder="IP、国家、地区、路径、UA">
+        </div>
+        <div class="field">
+          <label for="subdomain">子域名</label>
+          <select id="subdomain">
+            <option value="">全部</option>
+            <option value="hf-api">hf-api</option>
+            <option value="docs">docs</option>
+            <option value="peilv">peilv</option>
+            <option value="peilv-admin">peilv-admin</option>
+            <option value="logs">logs</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="method">方法</label>
+          <select id="method">
+            <option value="">全部</option>
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="OPTIONS">OPTIONS</option>
+          </select>
+        </div>
+        <button onclick="loadAll()">应用筛选</button>
+        <button class="secondary" onclick="resetFilters()">重置</button>
+        <button class="danger" onclick="clearAllLogs()">清空日志</button>
+      </div>
       <div style="overflow:auto">
         <table>
           <thead>
@@ -652,12 +766,54 @@ function renderPage() {
       return String(str).replace(/[&<>"']/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[s]));
     }
 
+    function getFilters() {
+      const params = new URLSearchParams();
+      params.set('limit', '50');
+
+      const q = document.getElementById('q').value.trim();
+      const subdomain = document.getElementById('subdomain').value;
+      const method = document.getElementById('method').value;
+
+      if (q) params.set('q', q);
+      if (subdomain) params.set('subdomain', subdomain);
+      if (method) params.set('method', method);
+
+      return params.toString();
+    }
+
+    function resetFilters() {
+      document.getElementById('q').value = '';
+      document.getElementById('subdomain').value = '';
+      document.getElementById('method').value = '';
+      loadAll();
+    }
+
+    async function clearAllLogs() {
+      const first = confirm('确定要清空全部访问日志吗？这个操作不能撤销。');
+      if (!first) return;
+
+      const second = prompt('请输入 DELETE 确认清空全部日志');
+      if (second !== 'DELETE') {
+        alert('已取消清空。');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/clear', { method: 'POST' });
+        if (!res.ok) throw new Error(await res.text());
+        alert('日志已清空。');
+        loadAll();
+      } catch (e) {
+        document.getElementById('error').textContent = '清空失败：' + e.message;
+      }
+    }
+
     async function loadAll() {
       document.getElementById('error').textContent = '';
       try {
         const [summary, recent, subdomain, path, country, daily] = await Promise.all([
           getJson('/api/summary'),
-          getJson('/api/recent?limit=50'),
+          getJson('/api/recent?' + getFilters()),
           getJson('/api/stats/subdomain'),
           getJson('/api/stats/path'),
           getJson('/api/stats/country'),
