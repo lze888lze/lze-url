@@ -54,7 +54,8 @@ export default {
     // 查找匹配的模块
     const mod = moduleMap[sub];
     if (mod) {
-      if (ctx?.waitUntil) {
+      // logs 是日志看板本身，只用于查看数据，不写入访问日志，避免看板 API 污染统计
+      if (ctx?.waitUntil && sub !== 'logs') {
         ctx.waitUntil(recordAccessToD1(request, env, sub));
       }
 
