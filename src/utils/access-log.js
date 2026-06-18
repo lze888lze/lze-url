@@ -11,6 +11,10 @@ export async function recordAccessToD1(request, env, sub) {
   }
 
   const url = new URL(request.url);
+  if (shouldSkipAccessLog(url)) {
+    return;
+  }
+
   const ip = request.headers.get('cf-connecting-ip') || '';
   const ua = request.headers.get('user-agent') || '';
   const referer = request.headers.get('referer') || '';
@@ -73,6 +77,31 @@ export async function recordAccessToD1(request, env, sub) {
   } catch (e) {
     console.error('D1 访问记录写入失败:', e);
   }
+}
+
+function shouldSkipAccessLog(url) {
+  const path = url.pathname.toLowerCase();
+
+  // 浏览器和爬虫经常自动请求，通常不算业务访问
+  if (path === '/favicon.ico' || path === '/robots.txt' || path === '/sitemap.xml') {
+    return true;
+  }
+
+  // 过滤常见公网扫描路径，避免 D1 被无意义数据刷屏
+  const blockedPrefixes = [
+    '/wp-',
+    '/wp/',
+    '/wp-admin',
+    '/wp-content',
+    '/wp-includes',
+    '/wp-json',
+    '/xmlrpc.php',
+    '/.env',
+    '/.git',
+    '/phpmyadmin',
+  ];
+
+  return blockedPrefixes.some(prefix => path.startsWith(prefix));
 }
 
 async function lookupIp(env, ip) {
