@@ -25,14 +25,7 @@ function getContentType(path) {
   return 'application/octet-stream';
 }
 
-async function serveR2(env, path, request) {
-  const cache = caches.default;
-  const cacheKey = new URL(request.url);
-
-  // 1) 先查边缘缓存，命中直接返回
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
-
+async function serveR2(env, path) {
   try {
     const object = await env.PEILV_BUCKET.get(path);
     if (!object) {
@@ -42,22 +35,11 @@ async function serveR2(env, path, request) {
     const contentType = getContentType(path);
     const headers = {
       'Content-Type': contentType,
-      ...corsHeaders()
+      ...corsHeaders(),
+      'Cache-Control': 'no-store, no-cache'
     };
 
-    // css/js/img：浏览器 30 天 + 边缘 30 天
-    if (/\.(css|js|png|jpg|ico|svg|woff2?)$/.test(path)) {
-      headers['Cache-Control'] = 'public, max-age=2592000, s-maxage=2592000, immutable';
-    } else {
-      // html：浏览器 60 秒 + 边缘 1 天（更新后去 CF 控制台 Purge Cache 即可）
-      headers['Cache-Control'] = 'public, max-age=60, s-maxage=86400';
-    }
-
-    const response = new Response(object.body, { headers });
-
-    // 2) 放进边缘缓存（clone 因为 body 只能读一次）
-    await cache.put(cacheKey, response.clone());
-    return response;
+    return new Response(object.body, { headers });
   } catch (e) {
     return new Response('Error: ' + e.message, { status: 500 });
   }
@@ -78,5 +60,5 @@ export async function handle(request, env, indexFile, sub) {
   // 路径规范化，防止 ../ 穿越到其他目录
   const safeFile = file.split('/').filter(seg => seg && seg !== '..').join('/');
   const path = folder + '/' + safeFile;
-  return await serveR2(env, path, request);
+  return await serveR2(env, path);
 }
