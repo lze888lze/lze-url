@@ -6,10 +6,6 @@ compatibility_date = "2024-01-01"
 binding = "PEILV_BUCKET"
 bucket_name = "lze-url"
 
-[[kv_namespaces]]
-binding = "lze"
-id = "d600db551a4e4b8a9745ac503317a80d"
-
 [[d1_databases]]
 binding = "IP_LOG_DB"
 database_name = "lze-url-logs"
