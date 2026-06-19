@@ -671,7 +671,7 @@ function renderPage() {
         <p>查看 D1 中记录的业务访问数据，数据来自 access_logs 表。</p>
       </div>
       <div>
-        <button onclick="loadAll()">刷新数据</button>
+        <button id="refreshBtn" onclick="loadAll()">刷新数据</button>
         <a href="/logout" style="margin-left:10px;color:var(--muted);text-decoration:none">退出</a>
       </div>
     </header>
@@ -811,6 +811,10 @@ function renderPage() {
     }
 
     async function loadAll() {
+      const btn = document.getElementById('refreshBtn');
+      const originalText = btn.textContent;
+      btn.textContent = '刷新中...';
+      btn.disabled = true;
       document.getElementById('error').textContent = '';
       try {
         const [summary, recent, subdomain, path, country, daily] = await Promise.all([
@@ -849,6 +853,9 @@ function renderPage() {
         }).join('') : '<tr><td colspan="8" class="muted">暂无数据</td></tr>';
       } catch (e) {
         document.getElementById('error').textContent = '加载失败：' + e.message;
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
       }
     }
 
