@@ -568,6 +568,22 @@ function renderPage() {
       background: var(--danger);
       color: white;
     }
+    button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
     .filters {
       display: grid;
       grid-template-columns: 1fr 150px 120px auto auto auto;
@@ -671,7 +687,10 @@ function renderPage() {
         <p>查看 D1 中记录的业务访问数据，数据来自 access_logs 表。</p>
       </div>
       <div>
-        <button id="refreshBtn" onclick="loadAll()">刷新数据</button>
+        <button id="refreshBtn" onclick="loadAll()">
+          <span id="refreshText">刷新数据</span>
+          <span id="refreshSpinner" class="spinner" style="display:none"></span>
+        </button>
         <a href="/logout" style="margin-left:10px;color:var(--muted);text-decoration:none">退出</a>
       </div>
     </header>
@@ -811,10 +830,12 @@ function renderPage() {
     }
 
     async function loadAll() {
+      const textEl = document.getElementById('refreshText');
+      const spinnerEl = document.getElementById('refreshSpinner');
       const btn = document.getElementById('refreshBtn');
-      const originalText = btn.textContent;
-      btn.textContent = '刷新中...';
       btn.disabled = true;
+      textEl.style.display = 'none';
+      spinnerEl.style.display = 'inline-block';
       document.getElementById('error').textContent = '';
       try {
         const [summary, recent, subdomain, path, country, daily] = await Promise.all([
@@ -854,7 +875,8 @@ function renderPage() {
       } catch (e) {
         document.getElementById('error').textContent = '加载失败：' + e.message;
       } finally {
-        btn.textContent = originalText;
+        textEl.style.display = 'inline';
+        spinnerEl.style.display = 'none';
         btn.disabled = false;
       }
     }
