@@ -14,6 +14,7 @@
 
 import * as pei_lv from './pei_lv/pei_lv.js';
 import * as docs from './docs/docs.js';
+import * as wxq_docs from './wxq-docs/wxq-docs.js';
 import * as hf_api from './hf-api/hf-api.js';
 import * as logs from './logs/logs.js';
 import { recordAccessToD1 } from './utils/access-log.js';
@@ -31,6 +32,11 @@ for (const [sub, indexFile] of Object.entries(pei_lv.subdomains)) {
 // 注册 docs 模块
 for (const [sub, indexFile] of Object.entries(docs.subdomains)) {
   moduleMap[sub] = { handler: docs, indexFile };
+}
+
+// 注册 wxq-docs 模块（APK 使用说明站）
+for (const [sub, indexFile] of Object.entries(wxq_docs.subdomains)) {
+  moduleMap[sub] = { handler: wxq_docs, indexFile };
 }
 
 // 注册 hf-api 模块
